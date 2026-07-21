@@ -76,3 +76,7 @@ pytest tests/ -v
 - **Error de red**: hasta 2 reintentos, luego `FAILED`.
 - **Heartbeat y reporte de resultados**: hasta 3 reintentos con backoff
   exponencial (1s, 2s, 4s) ante fallos de red.
+
+---
+
+Este proyecto forma parte del [Ecosistema Nexus](https://github.com/Alonex-x/nexus-agent-api/blob/main/ECOSYSTEM.md).
