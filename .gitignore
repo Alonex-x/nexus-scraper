@@ -1,5 +1,35 @@
+# Python
 __pycache__/
-*.pyc
-.env
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Entornos virtuales
+.venv/
 venv/
+env/
+ENV/
+
+# Variables de entorno
+.env
+.env.local
+
+# Logs
+*.log
+
+# Playwright
+.playwright-cache/
+
+# Pruebas / cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editores / SO
+.vscode/
 .idea/
+.DS_Store
+Thumbs.db
