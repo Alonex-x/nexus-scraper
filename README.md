@@ -80,3 +80,7 @@ pytest tests/ -v
 ---
 
 Este proyecto forma parte del [Ecosistema Nexus](https://github.com/Alonex-x/nexus-agent-api/blob/main/ECOSYSTEM.md).
+
+## Demostración en video
+
+[Ver demo del scraper en acción](demos/demo-scraper.mp4)
