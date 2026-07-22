@@ -25,8 +25,8 @@ AGENT_CAPABILITIES: Final[List[str]] = ["scrape_url"]
 
 API_BASE_URL: Final[str] = os.getenv("NEXUS_API_BASE_URL", "http://localhost:8080")
 
-_DEFAULT_DEV_API_KEY: Final[str] = "aOf-V6gbnxA0uRnsCMcBzWMwaMdKumP6gd0H10fgDhs"
-API_KEY: Final[str] = os.getenv("SCRAPER_API_KEY", _DEFAULT_DEV_API_KEY)
+
+API_KEY: Final[str] = os.getenv("SCRAPER_API_KEY", "")
 
 # --- Intervalos del bucle principal (segundos) ----------------------------
 

@@ -34,7 +34,7 @@ cargado con `python-dotenv`):
 
 | Variable | Descripción | Valor por defecto |
 |---|---|---|
-| `SCRAPER_API_KEY` | API Key del agente para autenticarse en Nexus (header `X-Agent-Key`). | Key de desarrollo embebida en `src/config.py` |
+| `SCRAPER_API_KEY` | API Key del agente para autenticarse en Nexus (header `X-Agent-Key`). | (requerido, sin valor por defecto) |
 | `NEXUS_API_BASE_URL` | URL base de la API Nexus. | `http://localhost:8080` |
 
 ## Ejecución
