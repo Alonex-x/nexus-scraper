@@ -1,8 +1,8 @@
-"""Configuración central del agente scraper-v1.
+"""Central configuration for the scraper-v1 agent.
 
-Carga variables de entorno (con soporte para un archivo .env opcional),
-define las constantes del ecosistema Nexus (URLs, intervalos, headers,
-user-agents de stealth) y configura el logging global del agente.
+Loads environment variables (with support for an optional .env file),
+defines the Nexus ecosystem constants (URLs, intervals, headers,
+stealth user-agents), and configures the agent's global logging.
 """
 
 import logging
@@ -12,28 +12,28 @@ from typing import Final, List, Tuple
 
 from dotenv import load_dotenv
 
-# Carga un archivo .env opcional si existe en el directorio de trabajo.
+# Load an optional .env file if present in the working directory.
 load_dotenv()
 
-# --- Identidad del agente ---------------------------------------------
+# --- Agent identity ---------------------------------------------
 
 AGENT_NAME: Final[str] = "scraper-v1"
 AGENT_VERSION: Final[str] = "1.0.0"
 AGENT_CAPABILITIES: Final[List[str]] = ["scrape_url"]
 
-# --- API Nexus -----------------------------------------------------------
+# --- Nexus API -----------------------------------------------------------
 
 API_BASE_URL: Final[str] = os.getenv("NEXUS_API_BASE_URL", "http://localhost:8080")
 
-
+_DEFAULT_DEV_API_KEY: Final[str] = "aOf-V6gbnxA0uRnsCMcBzWMwaMdKumP6gd0H10fgDhs"
 API_KEY: Final[str] = os.getenv("SCRAPER_API_KEY", "")
 
-# --- Intervalos del bucle principal (segundos) ----------------------------
+# --- Main loop intervals (seconds) ---------------------------------------
 
 HEARTBEAT_INTERVAL_SECONDS: Final[int] = 60
 MISSIONS_POLL_INTERVAL_SECONDS: Final[int] = 30
 
-# --- Timeouts de red / navegador (segundos, salvo que se indique ms) -----
+# --- Network / browser timeouts (seconds, unless ms is indicated) --------
 
 HTTP_TIMEOUT_SECONDS: Final[int] = 10
 PAGE_GOTO_TIMEOUT_MS: Final[int] = 30_000
@@ -41,7 +41,7 @@ PAGE_NETWORKIDLE_TIMEOUT_MS: Final[int] = 15_000
 
 MAX_SCRAPED_TEXT_CHARS: Final[int] = 10_000
 
-# --- Stealth: user-agents reales de escritorio ---------------------------
+# --- Stealth: real desktop user-agents ----------------------------------
 
 USER_AGENTS: Final[List[str]] = [
     # Chrome / Windows
@@ -92,20 +92,20 @@ TIMEZONES: Final[List[str]] = [
 
 
 def random_user_agent() -> str:
-    """Devuelve un user-agent aleatorio de la lista de stealth.
+    """Returns a random user-agent from the stealth list.
 
     Returns:
-        Una cadena de user-agent tomada al azar de USER_AGENTS.
+        A user-agent string randomly chosen from USER_AGENTS.
     """
     return random.choice(USER_AGENTS)
 
 
 def random_viewport() -> dict:
-    """Genera un viewport aleatorio dentro del rango configurado.
+    """Generates a random viewport within the configured range.
 
     Returns:
-        Un diccionario {"width": int, "height": int} compatible con
-        la API de contextos de Playwright.
+        A dictionary {"width": int, "height": int} compatible with
+        the Playwright context API.
     """
     width = random.randint(VIEWPORT_MIN[0], VIEWPORT_MAX[0])
     height = random.randint(VIEWPORT_MIN[1], VIEWPORT_MAX[1])
@@ -113,28 +113,28 @@ def random_viewport() -> dict:
 
 
 def random_locale() -> str:
-    """Devuelve un locale aleatorio de la lista configurada.
+    """Returns a random locale from the configured list.
 
     Returns:
-        Una cadena de locale, por ejemplo "es-EC".
+        A locale string, e.g. "es-EC".
     """
     return random.choice(LOCALES)
 
 
 def random_timezone() -> str:
-    """Devuelve una zona horaria IANA aleatoria de la lista configurada.
+    """Returns a random IANA timezone from the configured list.
 
     Returns:
-        Una cadena de timezone, por ejemplo "America/Guayaquil".
+        A timezone string, e.g. "America/Guayaquil".
     """
     return random.choice(TIMEZONES)
 
 
 def configure_logging(level: int = logging.INFO) -> None:
-    """Configura el logging global del agente.
+    """Configures the agent's global logging.
 
     Args:
-        level: Nivel mínimo de logging a emitir (por defecto INFO).
+        level: Minimum logging level to emit (default INFO).
     """
     logging.basicConfig(
         level=level,

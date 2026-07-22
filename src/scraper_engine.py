@@ -1,9 +1,9 @@
-"""Motor de scraping basado en Playwright para el agente scraper-v1.
+"""Playwright-based scraping engine for the scraper-v1 agent.
 
-Se encarga de lanzar un navegador Chromium headless con características
-de stealth (user-agent rotativo, viewport aleatorio, banderas de
-automatización desactivadas), navegar a la URL de la misión, extraer
-texto y devolver un resultado listo para reportar a la API Nexus.
+Launches a headless Chromium browser with stealth characteristics
+(rotating user-agent, random viewport, disabled automation flags),
+navigates to the mission URL, extracts text, and returns a result
+ready to be reported to the Nexus API.
 """
 
 import logging
@@ -30,8 +30,8 @@ from src import config
 
 logger = logging.getLogger(__name__)
 
-# Script inyectado antes de cada carga de página para reducir señales
-# comunes de detección de automatización.
+# Script injected before each page load to reduce common
+# automation detection signals.
 _STEALTH_INIT_SCRIPT = """
 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
 Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
@@ -41,25 +41,25 @@ window.chrome = window.chrome || { runtime: {} };
 
 
 class MissionURLError(Exception):
-    """Se lanza cuando la URL de la misión responde con un error HTTP.
+    """Raised when the mission URL responds with an HTTP error.
 
-    Usado para distinguir fallos definitivos (404, 500, etc.) de fallos
-    transitorios de red o timeout, que sí se reintentan.
+    Used to distinguish definitive failures (404, 500, etc.) from
+    transient network or timeout failures, which are retried.
     """
 
 
 async def build_stealth_context(browser: Browser) -> BrowserContext:
-    """Crea un contexto de navegador con configuración de stealth.
+    """Creates a browser context with stealth configuration.
 
-    Aplica un user-agent rotativo, viewport aleatorio, locale y
-    timezone aleatorios, y desactiva las banderas de detección de
-    automatización más comunes.
+    Applies a rotating user-agent, random viewport, random locale
+    and timezone, and disables the most common automation detection
+    flags.
 
     Args:
-        browser: Instancia de navegador Chromium ya lanzada.
+        browser: Already launched Chromium browser instance.
 
     Returns:
-        Un BrowserContext configurado con las características de stealth.
+        A BrowserContext configured with stealth characteristics.
     """
     context = await browser.new_context(
         user_agent=config.random_user_agent(),
@@ -73,20 +73,19 @@ async def build_stealth_context(browser: Browser) -> BrowserContext:
 
 
 async def extract_text(page: Page, selector: Optional[str]) -> Tuple[str, Optional[str]]:
-    """Extrae texto de la página, opcionalmente filtrado por un selector CSS.
+    """Extracts text from the page, optionally filtered by a CSS selector.
 
     Args:
-        page: Página de Playwright ya cargada.
-        selector: Selector CSS opcional. Si se provee, se extrae el
-            texto de todos los elementos que coincidan, unidos por
-            saltos de línea. Si es None, se extrae el innerText de
-            todo el body.
+        page: Already loaded Playwright page.
+        selector: Optional CSS selector. If provided, the text of all
+            matching elements is extracted and joined by newlines.
+            If None, the innerText of the entire body is extracted.
 
     Returns:
-        Una tupla (texto_extraido, nota). `nota` es "selector_no_match"
-        si se especificó un selector y no hubo coincidencias, o None en
-        cualquier otro caso. El texto se trunca a
-        config.MAX_SCRAPED_TEXT_CHARS caracteres.
+        A tuple (extracted_text, note). `note` is "selector_no_match"
+        if a selector was specified and no matches were found, or None
+        otherwise. The text is truncated to config.MAX_SCRAPED_TEXT_CHARS
+        characters.
     """
     if selector:
         elements = await page.query_selector_all(selector)
@@ -113,32 +112,31 @@ async def extract_text(page: Page, selector: Optional[str]) -> Tuple[str, Option
     reraise=True,
 )
 async def _navigate(page: Page, url: str) -> None:
-    """Navega a una URL con timeout y valida el código de estado HTTP.
+    """Navigates to a URL with timeout and validates the HTTP status code.
 
-    Reintenta hasta 2 veces ante timeouts o errores de red/protocolo
-    de Playwright. Un código de estado 4xx/5xx no se reintenta: se
-    convierte de inmediato en MissionURLError.
+    Retries up to 2 times on timeouts or Playwright network/protocol
+    errors. A 4xx/5xx status code is not retried: it is converted
+    immediately into MissionURLError.
 
     Args:
-        page: Página de Playwright destino.
-        url: URL a la que navegar.
+        page: Destination Playwright page.
+        url: URL to navigate to.
 
     Raises:
-        MissionURLError: Si la respuesta HTTP es 4xx o 5xx.
-        PlaywrightTimeoutError: Si la navegación excede el timeout tras
-            los reintentos.
-        PlaywrightError: Ante otros errores de red/protocolo tras los
-            reintentos.
+        MissionURLError: If the HTTP response is 4xx or 5xx.
+        PlaywrightTimeoutError: If navigation exceeds the timeout after
+            retries.
+        PlaywrightError: On other network/protocol errors after retries.
     """
     try:
         response = await page.goto(url, timeout=config.PAGE_GOTO_TIMEOUT_MS)
     except PlaywrightTimeoutError:
-        logger.warning("Timeout al cargar %s, reintentando...", url)
+        logger.warning("Timeout loading %s, retrying...", url)
         raise
 
     if response is not None and response.status >= 400:
         raise MissionURLError(
-            f"La URL {url} respondió con código HTTP {response.status}"
+            f"URL {url} responded with HTTP code {response.status}"
         )
 
     await page.wait_for_load_state(
@@ -147,24 +145,24 @@ async def _navigate(page: Page, url: str) -> None:
 
 
 async def scrape_url(url: str, selector: Optional[str] = None) -> Dict[str, Any]:
-    """Realiza el scraping completo de una URL en un navegador aislado.
+    """Performs a full scrape of a URL in an isolated browser.
 
-    Lanza Chromium headless, crea un contexto stealth, navega a la
-    URL, extrae el texto solicitado y cierra el navegador.
+    Launches headless Chromium, creates a stealth context, navigates to
+    the URL, extracts the requested text, and closes the browser.
 
     Args:
-        url: URL a scrapear.
-        selector: Selector CSS opcional para acotar la extracción.
+        url: URL to scrape.
+        selector: Optional CSS selector to narrow the extraction.
 
     Returns:
-        Diccionario con `scraped_text`, `url`, `timestamp` y,
-        opcionalmente, `note` si el selector no tuvo coincidencias.
+        Dictionary with `scraped_text`, `url`, `timestamp`, and
+        optionally `note` if the selector had no matches.
 
     Raises:
-        MissionURLError: Si la URL responde con un error HTTP.
-        PlaywrightTimeoutError: Si la navegación o la carga de red
-            no terminan dentro de los timeouts configurados.
-        PlaywrightError: Ante errores de red/protocolo de Playwright.
+        MissionURLError: If the URL responds with an HTTP error.
+        PlaywrightTimeoutError: If navigation or network load does not
+            finish within the configured timeouts.
+        PlaywrightError: On Playwright network/protocol errors.
     """
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(

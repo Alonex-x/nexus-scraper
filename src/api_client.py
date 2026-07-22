@@ -1,8 +1,8 @@
-"""Cliente HTTP para la API Nexus Agent Management.
+"""HTTP client for the Nexus Agent Management API.
 
-Encapsula las llamadas a los endpoints de registro, heartbeat, consulta
-de misiones pendientes y reporte de resultados, con reintentos y
-backoff exponencial mediante `tenacity`.
+Encapsulates calls to registration, heartbeat, pending mission
+query, and result reporting endpoints, with retries and
+exponential backoff via `tenacity`.
 """
 
 import logging
@@ -23,12 +23,12 @@ logger = logging.getLogger(__name__)
 
 
 class NexusApiClient:
-    """Cliente para interactuar con la API Nexus Agent Management.
+    """Client to interact with the Nexus Agent Management API.
 
     Attributes:
-        base_url: URL base de la API (por ejemplo http://localhost:8080).
-        api_key: API Key del agente, enviada en el header X-Agent-Key.
-        agent_name: Nombre del agente registrado en la API.
+        base_url: Base URL of the API (e.g. http://localhost:8080).
+        api_key: Agent API Key, sent in the X-Agent-Key header.
+        agent_name: Name of the agent registered in the API.
     """
 
     def __init__(
@@ -37,12 +37,12 @@ class NexusApiClient:
         api_key: str = config.API_KEY,
         agent_name: str = config.AGENT_NAME,
     ) -> None:
-        """Inicializa el cliente de la API.
+        """Initializes the API client.
 
         Args:
-            base_url: URL base de la API Nexus.
-            api_key: API Key del agente.
-            agent_name: Nombre del agente registrado.
+            base_url: Base URL of the Nexus API.
+            api_key: Agent API Key.
+            agent_name: Registered agent name.
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -50,10 +50,10 @@ class NexusApiClient:
         self._session = requests.Session()
 
     def _headers(self) -> Dict[str, str]:
-        """Construye los headers estándar para las peticiones autenticadas.
+        """Builds standard headers for authenticated requests.
 
         Returns:
-            Diccionario de headers HTTP con X-Agent-Key y Content-Type.
+            Dictionary of HTTP headers with X-Agent-Key and Content-Type.
         """
         return {
             "X-Agent-Key": self.api_key,
@@ -63,18 +63,18 @@ class NexusApiClient:
     def register(
         self, version: str = config.AGENT_VERSION, capabilities: Optional[List[str]] = None
     ) -> Dict[str, Any]:
-        """Registra el agente en la API Nexus.
+        """Registers the agent in the Nexus API.
 
         Args:
-            version: Versión del agente a registrar.
-            capabilities: Lista de capacidades del agente. Si es None,
-                se usa config.AGENT_CAPABILITIES.
+            version: Agent version to register.
+            capabilities: List of agent capabilities. If None,
+                config.AGENT_CAPABILITIES is used.
 
         Returns:
-            Diccionario con la respuesta de la API (id, name, apiKey).
+            Dictionary with the API response (id, name, apiKey).
 
         Raises:
-            requests.RequestException: Si la petición HTTP falla.
+            requests.RequestException: If the HTTP request fails.
         """
         payload = {
             "name": self.agent_name,
@@ -98,13 +98,13 @@ class NexusApiClient:
         reraise=True,
     )
     def _post_heartbeat(self) -> Dict[str, Any]:
-        """Envía el POST de heartbeat con reintentos (uso interno).
+        """Sends the heartbeat POST with retries (internal use).
 
         Returns:
-            Diccionario con el estado del agente devuelto por la API.
+            Dictionary with the agent status returned by the API.
 
         Raises:
-            requests.RequestException: Si todos los reintentos fallan.
+            requests.RequestException: If all retries fail.
         """
         response = self._session.post(
             f"{self.base_url}/api/v1/agents/heartbeat",
@@ -115,24 +115,23 @@ class NexusApiClient:
         return response.json()
 
     def heartbeat(self) -> Optional[Dict[str, Any]]:
-        """Envía un heartbeat a la API, con hasta 3 reintentos con backoff.
+        """Sends a heartbeat to the API, with up to 3 retries with backoff.
 
-        Si todos los reintentos fallan, se loguea un ERROR y se devuelve
-        None en lugar de propagar la excepción, para que el bucle
-        principal del agente pueda continuar.
+        If all retries fail, logs an ERROR and returns None instead of
+        propagating the exception, so the agent's main loop can continue.
 
         Returns:
-            El estado del agente devuelto por la API, o None si falló
-            definitivamente tras los reintentos.
+            The agent status returned by the API, or None if it failed
+            definitively after retries.
         """
         try:
             result = self._post_heartbeat()
-            logger.info("Heartbeat enviado correctamente")
-            logger.debug("Respuesta de heartbeat: %s", result)
+            logger.info("Heartbeat sent successfully")
+            logger.debug("Heartbeat response: %s", result)
             return result
         except requests.RequestException as exc:
             logger.error(
-                "Heartbeat falló definitivamente tras 3 intentos: %s", exc
+                "Heartbeat failed definitively after 3 attempts: %s", exc
             )
             return None
 
@@ -144,14 +143,13 @@ class NexusApiClient:
         reraise=True,
     )
     def fetch_pending_missions(self) -> List[Dict[str, Any]]:
-        """Consulta las misiones pendientes asignadas a este agente.
+        """Queries pending missions assigned to this agent.
 
         Returns:
-            Lista de misiones pendientes (posiblemente vacía).
+            List of pending missions (possibly empty).
 
         Raises:
-            requests.RequestException: Si la petición falla tras los
-                reintentos.
+            requests.RequestException: If the request fails after retries.
         """
         response = self._session.get(
             f"{self.base_url}/api/v1/missions/pending",
@@ -162,7 +160,7 @@ class NexusApiClient:
         response.raise_for_status()
         missions = response.json()
         if not missions:
-            logger.debug("No hay misiones pendientes")
+            logger.debug("No pending missions")
         return missions
 
     @retry(
@@ -175,19 +173,18 @@ class NexusApiClient:
     def report_mission_result(
         self, mission_id: str, status: str, result: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Reporta el resultado de una misión a la API.
+        """Reports a mission result to the API.
 
         Args:
-            mission_id: Identificador (UUID) de la misión.
-            status: "COMPLETED" o "FAILED".
-            result: Diccionario con los datos del resultado o del error.
+            mission_id: Mission identifier (UUID).
+            status: "COMPLETED" or "FAILED".
+            result: Dictionary with result or error data.
 
         Returns:
-            La respuesta JSON de la API.
+            The API JSON response.
 
         Raises:
-            requests.RequestException: Si la petición falla tras los
-                reintentos.
+            requests.RequestException: If the request fails after retries.
         """
         payload = {"status": status, "result": result}
         response = self._session.post(
@@ -200,13 +197,13 @@ class NexusApiClient:
         return response.json()
 
     def get_agents_status(self) -> List[Dict[str, Any]]:
-        """Obtiene el estado de todos los agentes registrados.
+        """Gets the status of all registered agents.
 
         Returns:
-            Lista de agentes con su estado actual.
+            List of agents with their current status.
 
         Raises:
-            requests.RequestException: Si la petición HTTP falla.
+            requests.RequestException: If the HTTP request fails.
         """
         response = self._session.get(
             f"{self.base_url}/api/v1/agents/status",

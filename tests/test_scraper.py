@@ -1,4 +1,4 @@
-"""Pruebas unitarias para src.api_client y src.scraper_engine."""
+"""Unit tests for src.api_client and src.scraper_engine."""
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
@@ -17,21 +17,21 @@ from src.scraper_engine import extract_text
 
 @pytest.fixture
 def client() -> NexusApiClient:
-    """Cliente de API Nexus apuntando a un host de pruebas."""
+    """Nexus API client pointing to a test host."""
     return NexusApiClient(
         base_url="http://localhost:8080", api_key="test-key", agent_name="scraper-v1"
     )
 
 
 def _mock_response(json_data: dict, status_code: int = 200) -> MagicMock:
-    """Construye un mock de requests.Response.
+    """Builds a mock for requests.Response.
 
     Args:
-        json_data: Cuerpo JSON simulado de la respuesta.
-        status_code: Código de estado HTTP simulado.
+        json_data: Simulated JSON response body.
+        status_code: Simulated HTTP status code.
 
     Returns:
-        Un MagicMock que imita una requests.Response exitosa.
+        A MagicMock that mimics a successful requests.Response.
     """
     response = MagicMock()
     response.status_code = status_code
@@ -46,7 +46,7 @@ def _mock_response(json_data: dict, status_code: int = 200) -> MagicMock:
 
 
 def test_heartbeat_success(client: NexusApiClient, mocker) -> None:
-    """El heartbeat exitoso devuelve el JSON de la API."""
+    """A successful heartbeat returns the API JSON."""
     mock_post = mocker.patch.object(
         client._session,
         "post",
@@ -60,7 +60,7 @@ def test_heartbeat_success(client: NexusApiClient, mocker) -> None:
 
 
 def test_heartbeat_failure_returns_none(client: NexusApiClient, mocker) -> None:
-    """Si todos los reintentos de heartbeat fallan, se devuelve None."""
+    """If all heartbeat retries fail, None is returned."""
     mocker.patch.object(
         client._session,
         "post",
@@ -79,7 +79,7 @@ def test_heartbeat_failure_returns_none(client: NexusApiClient, mocker) -> None:
 
 
 def test_fetch_pending_missions_empty(client: NexusApiClient, mocker) -> None:
-    """Una respuesta vacía se devuelve tal cual, sin errores."""
+    """An empty response is returned as is, without errors."""
     mocker.patch.object(
         client._session, "get", return_value=_mock_response([])
     )
@@ -90,7 +90,7 @@ def test_fetch_pending_missions_empty(client: NexusApiClient, mocker) -> None:
 
 
 def test_fetch_pending_missions_with_data(client: NexusApiClient, mocker) -> None:
-    """Una respuesta con misiones se deserializa correctamente."""
+    """A response with missions is correctly deserialized."""
     expected = [
         {
             "id": "abc-123",
@@ -115,13 +115,13 @@ def test_fetch_pending_missions_with_data(client: NexusApiClient, mocker) -> Non
 
 
 def test_report_mission_result_completed(client: NexusApiClient, mocker) -> None:
-    """Reportar una misión COMPLETED envía el payload esperado."""
+    """Reporting a COMPLETED mission sends the expected payload."""
     mock_post = mocker.patch.object(
         client._session, "post", return_value=_mock_response({"ok": True})
     )
 
     result = client.report_mission_result(
-        "abc-123", "COMPLETED", {"scraped_text": "hola"}
+        "abc-123", "COMPLETED", {"scraped_text": "hello"}
     )
 
     assert result == {"ok": True}
@@ -130,7 +130,7 @@ def test_report_mission_result_completed(client: NexusApiClient, mocker) -> None
 
 
 def test_report_mission_result_failed(client: NexusApiClient, mocker) -> None:
-    """Reportar una misión FAILED envía el payload esperado."""
+    """Reporting a FAILED mission sends the expected payload."""
     mock_post = mocker.patch.object(
         client._session, "post", return_value=_mock_response({"ok": True})
     )
@@ -150,35 +150,35 @@ def test_report_mission_result_failed(client: NexusApiClient, mocker) -> None:
 
 
 def test_extract_text_without_selector() -> None:
-    """Sin selector, se extrae el innerText completo del body."""
+    """Without a selector, the full body innerText is extracted."""
     page = MagicMock()
-    page.inner_text = AsyncMock(return_value="Contenido completo de la página")
+    page.inner_text = AsyncMock(return_value="Full page content")
 
     text, note = asyncio.run(extract_text(page, None))
 
-    assert text == "Contenido completo de la página"
+    assert text == "Full page content"
     assert note is None
     page.inner_text.assert_awaited_once_with("body")
 
 
 def test_extract_text_with_selector_match() -> None:
-    """Con selector y coincidencias, se concatena el texto de cada elemento."""
+    """With a selector and matches, the text of each element is concatenated."""
     element_1 = MagicMock()
-    element_1.inner_text = AsyncMock(return_value="Párrafo 1")
+    element_1.inner_text = AsyncMock(return_value="Paragraph 1")
     element_2 = MagicMock()
-    element_2.inner_text = AsyncMock(return_value="Párrafo 2")
+    element_2.inner_text = AsyncMock(return_value="Paragraph 2")
 
     page = MagicMock()
     page.query_selector_all = AsyncMock(return_value=[element_1, element_2])
 
     text, note = asyncio.run(extract_text(page, "div.content"))
 
-    assert text == "Párrafo 1\nPárrafo 2"
+    assert text == "Paragraph 1\nParagraph 2"
     assert note is None
 
 
 def test_extract_text_selector_no_match() -> None:
-    """Con selector sin coincidencias, se devuelve texto vacío y una nota."""
+    """With a selector and no matches, empty text and a note are returned."""
     page = MagicMock()
     page.query_selector_all = AsyncMock(return_value=[])
 

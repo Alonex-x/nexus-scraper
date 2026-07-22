@@ -1,8 +1,8 @@
-"""Punto de entrada del agente scraper-v1.
+"""Entry point for the scraper-v1 agent.
 
-Registra el bucle principal asíncrono que mantiene el heartbeat con la
-API Nexus, consulta y ejecuta misiones de scraping, y responde de
-forma limpia a SIGTERM/SIGINT.
+Sets up the main async loop that maintains the heartbeat with the
+Nexus API, polls and executes scraping missions, and responds
+cleanly to SIGTERM/SIGINT.
 """
 
 import asyncio
@@ -23,41 +23,41 @@ logger = logging.getLogger(__name__)
 
 
 class ScraperAgent:
-    """Orquesta el ciclo de vida del agente scraper-v1.
+    """Orchestrates the lifecycle of the scraper-v1 agent.
 
     Attributes:
-        client: Cliente de la API Nexus.
-        _stop_event: Evento asíncrono que señala el apagado del agente.
+        client: Nexus API client.
+        _stop_event: Async event that signals agent shutdown.
     """
 
     def __init__(self, client: NexusApiClient) -> None:
-        """Inicializa el agente.
+        """Initializes the agent.
 
         Args:
-            client: Cliente de la API Nexus ya configurado.
+            client: Already configured Nexus API client.
         """
         self.client = client
         self._stop_event = asyncio.Event()
 
     def request_stop(self) -> None:
-        """Marca el evento de parada para detener los bucles limpiamente."""
+        """Sets the stop event to shut down loops cleanly."""
         self._stop_event.set()
 
     async def heartbeat_loop(self) -> None:
-        """Bucle que envía un heartbeat cada HEARTBEAT_INTERVAL_SECONDS."""
+        """Loop that sends a heartbeat every HEARTBEAT_INTERVAL_SECONDS."""
         while not self._stop_event.is_set():
             await asyncio.to_thread(self.client.heartbeat)
             await self._wait_or_stop(config.HEARTBEAT_INTERVAL_SECONDS)
 
     async def missions_loop(self) -> None:
-        """Bucle que consulta y ejecuta misiones cada MISSIONS_POLL_INTERVAL_SECONDS."""
+        """Loop that polls and executes missions every MISSIONS_POLL_INTERVAL_SECONDS."""
         while not self._stop_event.is_set():
             try:
                 missions = await asyncio.to_thread(
                     self.client.fetch_pending_missions
                 )
             except requests.RequestException as exc:
-                logger.error("Error al consultar misiones pendientes: %s", exc)
+                logger.error("Error fetching pending missions: %s", exc)
                 missions = []
 
             for mission in missions:
@@ -66,10 +66,10 @@ class ScraperAgent:
             await self._wait_or_stop(config.MISSIONS_POLL_INTERVAL_SECONDS)
 
     async def _wait_or_stop(self, seconds: int) -> None:
-        """Espera `seconds` segundos, o hasta que se pida la parada.
+        """Waits `seconds` seconds, or until stop is requested.
 
         Args:
-            seconds: Cantidad máxima de segundos a esperar.
+            seconds: Maximum number of seconds to wait.
         """
         try:
             await asyncio.wait_for(self._stop_event.wait(), timeout=seconds)
@@ -77,10 +77,10 @@ class ScraperAgent:
             pass
 
     async def _process_mission(self, mission: Dict[str, Any]) -> None:
-        """Ejecuta una misión de scraping y reporta su resultado.
+        """Executes a scraping mission and reports its result.
 
         Args:
-            mission: Diccionario de la misión (id, agentName, action,
+            mission: Mission dictionary (id, agentName, action,
                 params, status).
         """
         mission_id = mission["id"]
@@ -91,39 +91,39 @@ class ScraperAgent:
         try:
             result = await scrape_url(url, selector)
             status = "COMPLETED"
-            logger.info("Misión %s completada", mission_id)
+            logger.info("Mission %s completed", mission_id)
         except MissionURLError as exc:
             status = "FAILED"
             result = self._error_result(url, str(exc))
-            logger.info("Misión %s fallida: %s", mission_id, exc)
+            logger.info("Mission %s failed: %s", mission_id, exc)
         except PlaywrightTimeoutError as exc:
             status = "FAILED"
-            result = self._error_result(url, f"Timeout al cargar {url}: {exc}")
-            logger.info("Misión %s fallida: %s", mission_id, exc)
+            result = self._error_result(url, f"Timeout loading {url}: {exc}")
+            logger.info("Mission %s failed: %s", mission_id, exc)
         except PlaywrightError as exc:
             status = "FAILED"
-            result = self._error_result(url, f"Error de red/navegador: {exc}")
-            logger.info("Misión %s fallida: %s", mission_id, exc)
-        except Exception as exc:  # noqa: BLE001 - último recurso, ver nota abajo
-            # Excepción no anticipada durante la ejecución de la misión:
-            # se reporta como FAILED en lugar de tumbar el agente.
+            result = self._error_result(url, f"Network/browser error: {exc}")
+            logger.info("Mission %s failed: %s", mission_id, exc)
+        except Exception as exc:  # noqa: BLE001 - last resort, see note below
+            # Unhandled exception during mission execution:
+            # reported as FAILED instead of crashing the agent.
             status = "FAILED"
             result = self._error_result(url, str(exc))
             logger.error(
-                "Error crítico al ejecutar misión %s: %s", mission_id, exc
+                "Critical error executing mission %s: %s", mission_id, exc
             )
 
         await self._report_result(mission_id, status, result)
 
     def _error_result(self, url: str, message: str) -> Dict[str, Any]:
-        """Construye el diccionario de resultado para una misión fallida.
+        """Builds the result dictionary for a failed mission.
 
         Args:
-            url: URL que se intentaba scrapear.
-            message: Mensaje descriptivo del error.
+            url: URL that was being scraped.
+            message: Descriptive error message.
 
         Returns:
-            Diccionario con `error`, `url` y `timestamp`.
+            Dictionary with `error`, `url`, and `timestamp`.
         """
         return {
             "error": message,
@@ -134,12 +134,12 @@ class ScraperAgent:
     async def _report_result(
         self, mission_id: str, status: str, result: Dict[str, Any]
     ) -> None:
-        """Reporta el resultado de una misión, tolerando fallos de red.
+        """Reports a mission result, tolerating network failures.
 
         Args:
-            mission_id: Identificador de la misión.
-            status: "COMPLETED" o "FAILED".
-            result: Diccionario de resultado a enviar.
+            mission_id: Mission identifier.
+            status: "COMPLETED" or "FAILED".
+            result: Result dictionary to send.
         """
         try:
             await asyncio.to_thread(
@@ -147,30 +147,30 @@ class ScraperAgent:
             )
         except requests.RequestException as exc:
             logger.error(
-                "No se pudo reportar el resultado de la misión %s: %s",
+                "Could not report mission %s result: %s",
                 mission_id,
                 exc,
             )
 
     async def run(self) -> None:
-        """Ejecuta ambos bucles (heartbeat y misiones) de forma concurrente."""
-        logger.info("Agente %s iniciado", config.AGENT_NAME)
+        """Runs both loops (heartbeat and missions) concurrently."""
+        logger.info("Agent %s started", config.AGENT_NAME)
         await asyncio.gather(self.heartbeat_loop(), self.missions_loop())
 
 
 def _install_signal_handlers(loop: asyncio.AbstractEventLoop, agent: ScraperAgent) -> None:
-    """Registra manejadores de SIGTERM/SIGINT para detener el agente.
+    """Registers SIGTERM/SIGINT handlers to stop the agent.
 
     Args:
-        loop: Event loop de asyncio en ejecución.
-        agent: Instancia del agente a detener.
+        loop: Running asyncio event loop.
+        agent: Agent instance to stop.
     """
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, agent.request_stop)
 
 
 async def _main() -> None:
-    """Configura logging, cliente y arranca el agente hasta que se detenga."""
+    """Configures logging, client, and starts the agent until stopped."""
     config.configure_logging()
     client = NexusApiClient()
     agent = ScraperAgent(client)
@@ -179,7 +179,7 @@ async def _main() -> None:
     _install_signal_handlers(loop, agent)
 
     await agent.run()
-    logging.info("Agente %s detenido limpiamente", config.AGENT_NAME)
+    logging.info("Agent %s stopped cleanly", config.AGENT_NAME)
 
 
 if __name__ == "__main__":
