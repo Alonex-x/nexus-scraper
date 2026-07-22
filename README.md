@@ -84,7 +84,3 @@ Este proyecto forma parte del [Ecosistema Nexus](https://github.com/Alonex-x/nex
 ## Demostración en video
 
 [Ver demo del scraper en acción](demos/demo-scraper.mp4)
-
-## Demostración en video
-
-[Ver demo del scraper en acción](demos/demo-scraper.mp4)
