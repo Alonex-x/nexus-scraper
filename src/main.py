@@ -10,6 +10,7 @@ Upgrade to Nexus Scraper PRO for:
 """
 
 import asyncio
+import json
 import logging
 import signal
 import sys
@@ -32,7 +33,7 @@ VERSION = "1.0.0"
 def print_help() -> None:
     """Prints usage information and exits."""
     print(f"Nexus Scraper v{VERSION} (Lite) - part of the Nexus Ecosystem")
-    print("Usage: python -m src.main [--version] [--help]")
+    print("Usage: python -m src.main [--version] [--help] [--recipe <file.yaml>]")
     print("\nPRO version available at: [Gumroad link here]")
     sys.exit(0)
 
@@ -41,6 +42,47 @@ def print_version() -> None:
     """Prints version information and exits."""
     print(f"Nexus Scraper v{VERSION} (Lite)")
     print("PRO version available at: [Gumroad link here]")
+    sys.exit(0)
+
+
+def run_recipe_file(filepath: str) -> None:
+    """Executes a scraping recipe from a YAML or JSON file and prints results as JSON.
+
+    Args:
+        filepath: Path to the recipe file (.yaml, .yml, or .json).
+    """
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            if filepath.endswith((".yaml", ".yml")):
+                import yaml
+                recipe = yaml.safe_load(f)
+            else:
+                recipe = json.load(f)
+    except FileNotFoundError:
+        print(f"Error: Recipe file not found: {filepath}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error reading recipe: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    url = recipe.get("url")
+    selector = recipe.get("selector")
+    if not url or not selector:
+        print("Error: Recipe must contain 'url' and 'selector' keys.", file=sys.stderr)
+        sys.exit(1)
+
+    async def _run():
+        try:
+            result = await scrape_url(url, selector)
+            print(json.dumps({"status": "success", "data": result}, indent=2))
+        except MissionURLError as e:
+            print(json.dumps({"status": "failed", "error": str(e)}, indent=2))
+            sys.exit(1)
+        except Exception as e:
+            print(json.dumps({"status": "failed", "error": str(e)}, indent=2))
+            sys.exit(1)
+
+    asyncio.run(_run())
     sys.exit(0)
 
 
@@ -159,4 +201,12 @@ if __name__ == "__main__":
         print_help()
     if "--version" in sys.argv:
         print_version()
+    # Handle --recipe flag
+    if "--recipe" in sys.argv:
+        idx = sys.argv.index("--recipe") + 1
+        if idx < len(sys.argv):
+            run_recipe_file(sys.argv[idx])
+        else:
+            print("Error: --recipe requires a file path.", file=sys.stderr)
+            sys.exit(1)
     asyncio.run(_main())
