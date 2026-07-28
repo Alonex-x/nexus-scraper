@@ -1,13 +1,18 @@
-"""Entry point for the scraper-v1 agent.
+"""Entry point for the scraper-v1 agent. Part of the Nexus Ecosystem.
 
-Sets up the main async loop that maintains the heartbeat with the
-Nexus API, polls and executes scraping missions, and responds
-cleanly to SIGTERM/SIGINT.
+Upgrade to Nexus Scraper PRO for:
+  - Web dashboard and recipe manager (YAML/JSON)
+  - Dynamic scraping (Playwright) with proxy rotation
+  - Scheduled monitors with Telegram/email alerts
+  - CSV, Excel, JSON, and SQLite export
+
+  Get the PRO version at: [Gumroad link here]
 """
 
 import asyncio
 import logging
 import signal
+import sys
 from datetime import datetime, timezone
 from typing import Any, Dict
 
@@ -21,36 +26,40 @@ from src.scraper_engine import MissionURLError, scrape_url
 
 logger = logging.getLogger(__name__)
 
+VERSION = "1.0.0"
+
+
+def print_help() -> None:
+    """Prints usage information and exits."""
+    print(f"Nexus Scraper v{VERSION} (Lite) - part of the Nexus Ecosystem")
+    print("Usage: python -m src.main [--version] [--help]")
+    print("\nPRO version available at: [Gumroad link here]")
+    sys.exit(0)
+
+
+def print_version() -> None:
+    """Prints version information and exits."""
+    print(f"Nexus Scraper v{VERSION} (Lite)")
+    print("PRO version available at: [Gumroad link here]")
+    sys.exit(0)
+
 
 class ScraperAgent:
-    """Orchestrates the lifecycle of the scraper-v1 agent.
-
-    Attributes:
-        client: Nexus API client.
-        _stop_event: Async event that signals agent shutdown.
-    """
+    """Orchestrates the lifecycle of the scraper-v1 agent."""
 
     def __init__(self, client: NexusApiClient) -> None:
-        """Initializes the agent.
-
-        Args:
-            client: Already configured Nexus API client.
-        """
         self.client = client
         self._stop_event = asyncio.Event()
 
     def request_stop(self) -> None:
-        """Sets the stop event to shut down loops cleanly."""
         self._stop_event.set()
 
     async def heartbeat_loop(self) -> None:
-        """Loop that sends a heartbeat every HEARTBEAT_INTERVAL_SECONDS."""
         while not self._stop_event.is_set():
             await asyncio.to_thread(self.client.heartbeat)
             await self._wait_or_stop(config.HEARTBEAT_INTERVAL_SECONDS)
 
     async def missions_loop(self) -> None:
-        """Loop that polls and executes missions every MISSIONS_POLL_INTERVAL_SECONDS."""
         while not self._stop_event.is_set():
             try:
                 missions = await asyncio.to_thread(
@@ -66,23 +75,12 @@ class ScraperAgent:
             await self._wait_or_stop(config.MISSIONS_POLL_INTERVAL_SECONDS)
 
     async def _wait_or_stop(self, seconds: int) -> None:
-        """Waits `seconds` seconds, or until stop is requested.
-
-        Args:
-            seconds: Maximum number of seconds to wait.
-        """
         try:
             await asyncio.wait_for(self._stop_event.wait(), timeout=seconds)
         except asyncio.TimeoutError:
             pass
 
     async def _process_mission(self, mission: Dict[str, Any]) -> None:
-        """Executes a scraping mission and reports its result.
-
-        Args:
-            mission: Mission dictionary (id, agentName, action,
-                params, status).
-        """
         mission_id = mission["id"]
         params = mission.get("params", {})
         url = params.get("url")
@@ -104,9 +102,7 @@ class ScraperAgent:
             status = "FAILED"
             result = self._error_result(url, f"Network/browser error: {exc}")
             logger.info("Mission %s failed: %s", mission_id, exc)
-        except Exception as exc:  # noqa: BLE001 - last resort, see note below
-            # Unhandled exception during mission execution:
-            # reported as FAILED instead of crashing the agent.
+        except Exception as exc:
             status = "FAILED"
             result = self._error_result(url, str(exc))
             logger.error(
@@ -116,15 +112,6 @@ class ScraperAgent:
         await self._report_result(mission_id, status, result)
 
     def _error_result(self, url: str, message: str) -> Dict[str, Any]:
-        """Builds the result dictionary for a failed mission.
-
-        Args:
-            url: URL that was being scraped.
-            message: Descriptive error message.
-
-        Returns:
-            Dictionary with `error`, `url`, and `timestamp`.
-        """
         return {
             "error": message,
             "url": url,
@@ -134,13 +121,6 @@ class ScraperAgent:
     async def _report_result(
         self, mission_id: str, status: str, result: Dict[str, Any]
     ) -> None:
-        """Reports a mission result, tolerating network failures.
-
-        Args:
-            mission_id: Mission identifier.
-            status: "COMPLETED" or "FAILED".
-            result: Result dictionary to send.
-        """
         try:
             await asyncio.to_thread(
                 self.client.report_mission_result, mission_id, status, result
@@ -153,24 +133,16 @@ class ScraperAgent:
             )
 
     async def run(self) -> None:
-        """Runs both loops (heartbeat and missions) concurrently."""
         logger.info("Agent %s started", config.AGENT_NAME)
         await asyncio.gather(self.heartbeat_loop(), self.missions_loop())
 
 
 def _install_signal_handlers(loop: asyncio.AbstractEventLoop, agent: ScraperAgent) -> None:
-    """Registers SIGTERM/SIGINT handlers to stop the agent.
-
-    Args:
-        loop: Running asyncio event loop.
-        agent: Agent instance to stop.
-    """
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, agent.request_stop)
 
 
 async def _main() -> None:
-    """Configures logging, client, and starts the agent until stopped."""
     config.configure_logging()
     client = NexusApiClient()
     agent = ScraperAgent(client)
@@ -183,4 +155,8 @@ async def _main() -> None:
 
 
 if __name__ == "__main__":
+    if "--help" in sys.argv:
+        print_help()
+    if "--version" in sys.argv:
+        print_version()
     asyncio.run(_main())
